@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
-const port = 5000;
+const port = process.env.PORT || 5000;
 
 // middleware
 
@@ -39,21 +39,32 @@ async function run() {
 
     app.get("/users/:id", async (req, res) => {
       const id = req.params.id;
+
       const query = { _id: new ObjectId(id) };
       const user = await myColl.findOne(query);
       res.send(user);
     });
 
+    app.put("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedUser = req.body;
+      console.log(updatedUser);
+      const filter = { _id: new ObjectId(id) };
+      const option = { upsert: true };
+      const updated = {
+        $set: {
+          name: updatedUser.name,
+          email: updatedUser.email,
+        },
+      };
+      const result = await myColl.updateOne(filter, updated, option);
+      res.send(result);
+    });
     app.post("/users", async (req, res) => {
       const user = req.body;
       console.log(user);
       const result = await myColl.insertOne(user);
       res.send(result);
-    });
-
-    app.put("users/:id", async (req, res) => {
-      const id = req.params.id;
-      const updatedUser = req.body;
     });
 
     app.delete("/users/:id", async (req, res) => {
