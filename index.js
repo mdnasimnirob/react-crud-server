@@ -1,6 +1,9 @@
 const express = require("express");
+const multer = require("multer");
+const path = require("path");
 require("dotenv").config();
 const cors = require("cors");
+
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const port = process.env.PORT || 5000;
@@ -9,6 +12,21 @@ const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
+app.use("/uploads", express.static("uploads")); // Serve images
+// upload photo
+
+const storage = multer.diskStorage({
+  destination: "uploads/",
+  filename: (req, file, cb) => {
+    cb(
+      null,
+      file.fieldname + "-" + Date.now() + path.extname(file.originalname)
+    );
+  },
+});
+
+const upload = multer({ storage: storage });
+// uploads photo
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.npnkk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -42,26 +60,86 @@ async function run() {
       res.send(user);
     });
 
-    app.put("/users/:id", async (req, res) => {
+    // app.put("/users/:id", async (req, res) => {
+    //   const id = req.params.id;
+    //   const updatedUser = req.body;
+    //   console.log(updatedUser);
+    //   const filter = { _id: new ObjectId(id) };
+    //   const option = { upsert: true };
+    //   const updated = {
+    //     $set: {
+    //       name: updatedUser.name,
+    //       email: updatedUser.email,
+    //     },
+    //   };
+    //   const result = await myColl.updateOne(filter, updated, option);
+    //   res.send(result);
+    // });
+    // app.post("/users", upload.single("photo"), async (req, res) => {
+    //   const user = req.body;
+    //   console.log(user);
+    //   const result = await myColl.insertOne(user);
+    //   res.send(result);
+    // });
+
+    // app.put("/users/:id", upload.single("photo"), async (req, res) => {
+    //   const id = req.params.id;
+    //   const updatedUser = req.body;
+    //   const filter = { _id: new ObjectId(id) };
+
+    //   let updatedFields = {
+    //     name: updatedUser.name,
+    //     email: updatedUser.email,
+    //   };
+
+    //   if (req.file) {
+    //     updatedFields.photoUrl = `/uploads/${req.file.filename}`; // New image
+    //   } else {
+    //     updatedFields.photoUrl = updatedUser.photoUrl; // Keep old image
+    //   }
+
+    //   const updated = { $set: updatedFields };
+    //   const result = await myColl.updateOne(filter, updated);
+    //   res.send(result);
+    // });
+
+    app.put("/users/:id", upload.single("photo"), async (req, res) => {
       const id = req.params.id;
       const updatedUser = req.body;
-      console.log(updatedUser);
       const filter = { _id: new ObjectId(id) };
-      const option = { upsert: true };
-      const updated = {
-        $set: {
-          name: updatedUser.name,
-          email: updatedUser.email,
-        },
+
+      // Get existing user from the database
+      const existingUser = await myColl.findOne(filter);
+
+      let updatedFields = {
+        name: updatedUser.name,
+        email: updatedUser.email,
+        photoUrl: existingUser.photoUrl, // Keep the old image by default
       };
-      const result = await myColl.updateOne(filter, updated, option);
+
+      if (req.file) {
+        updatedFields.photoUrl = `/uploads/${req.file.filename}`; // Only update if a new file is uploaded
+      }
+
+      const updated = { $set: updatedFields };
+      const result = await myColl.updateOne(filter, updated);
       res.send(result);
     });
-    app.post("/users", async (req, res) => {
-      const user = req.body;
-      console.log(user);
-      const result = await myColl.insertOne(user);
-      res.send(result);
+
+    app.post("/users", upload.single("photo"), async (req, res) => {
+      try {
+        const { name, email } = req.body;
+        const photoUrl = req.file ? `/uploads/${req.file.filename}` : null; // Store file path
+
+        const user = { name, email, photoUrl }; // Save URL instead of file object
+        console.log(user);
+        const result = await myColl.insertOne(user);
+
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Error adding user" });
+      }
     });
 
     app.delete("/users/:id", async (req, res) => {
